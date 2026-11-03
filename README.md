@@ -1,6 +1,23 @@
 # StaDiff - Staged Diffusion, Corrupted Where It Matters
 ## Context-Aware Two-Stage Diffusion for Welding Anomaly Detection
 
+
+<table>
+  <tr>
+    <td align="left" valign="top">
+      <b>Khan Hamza</b><br>
+      University of Milan - Bicocca<br>
+      <a href="mailto:h.khan@campus.unimib.it">h.khan@campus.unimib.it</a>
+    </td>
+    <td width="120"></td>
+    <td align="left" valign="top">
+      <b>Hunor-István Lukács</b><br>
+      Eötvös Loránd University<br>
+      <a href="mailto:lukacs.hunor@inf.elte.hu">lukacs.hunor@inf.elte.hu</a>
+    </td>
+  </tr>
+</table>
+
 A diffusion model learns what **normal** weld images look like, using clean images only. At test time
 the rods (the ROI) are heavily noised to erase any defect, and the background is lightly noised so the
 scene stays as context. The model rebuilds the rods in two stages, and the difference between the input
