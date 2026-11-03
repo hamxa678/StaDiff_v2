@@ -10,8 +10,9 @@ A normal image has three evenly spaced, straight rods, each with exactly one wel
 **ROI = the rods and their welds together** (three fixed full-height columns). A bent rod, wrong spacing,
 or a missing, extra or misplaced weld all change what appears inside those columns.
 
----
+   ![StaDiff-V3 architecture](docs/architecture.png)
 
+---
 ## 1. Folder structure
 
 ```
