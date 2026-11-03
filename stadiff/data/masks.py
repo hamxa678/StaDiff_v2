@@ -84,6 +84,11 @@ def get_masks(data_cfg) -> tuple[np.ndarray, np.ndarray]:
     """-> (M union (H, W), per-rod masks (n, H, W)) according to the config."""
     size = tuple(data_cfg["image_size"])
     src = data_cfg["mask_source"]
+    if src == "box":
+        # One rectangle around all three rods (separator plates between them included).
+        # Per-rod scores still use the rod columns, clipped to the box.
+        M = box_mask(size, [tuple(data_cfg["roi_box"])])
+        return M, per_rod_masks(size, ROD_BOXES) * M[None]
     if src == "rods":
         return box_mask(size, ROD_BOXES), per_rod_masks(size, ROD_BOXES)
     if src == "welds":

@@ -29,7 +29,7 @@ def main():
     ap.add_argument("--out", default="runs/mask", help="folder for roi_mask.png and mask_check.png")
     ap.add_argument("--n", type=int, default=8, help="images per class in the check sheet")
     add_common_flags(ap)
-    add_config_flags(ap, ["data.root", "data.image_size", "data.mask_source", "data.mask_path",
+    add_config_flags(ap, ["data.root", "data.image_size", "data.mask_source", "data.roi_box", "data.mask_path",
                           "data.prepare_method", "data.norm"])
     a = ap.parse_args()
 

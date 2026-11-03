@@ -27,7 +27,7 @@ ALIASES = {
 CHOICES = {
     "data.prepare_method": ["area", "bicubic", "bilinear_noaa"],
     "data.norm": ["percentile", "none"],
-    "data.mask_source": ["rods", "welds", "file"],
+    "data.mask_source": ["rods", "box", "welds", "file"],
     "diffusion.beta_schedule": ["linear", "cosine"],
     "diffusion.noise_type": ["gaussian", "simplex"],
     "eval.sampler": ["ddim", "ddpm"],
@@ -47,7 +47,8 @@ HELP = {
     "data.image_size": "H W of the network input, both divisible by 16",
     "data.prepare_method": "resize method for raw images",
     "data.norm": "intensity normalisation per image",
-    "data.mask_source": "ROI: rods = rod+weld columns, welds = bead boxes, file = your PNG",
+    "data.mask_source": "ROI: rods = rod+weld columns, box = one rectangle around all rods, welds = bead boxes, file = your PNG",
+    "data.roi_box": "the rectangle for --mask-source box: x0 y0 x1 y1 as fractions of width/height",
     "data.mask_path": "mask PNG (white = ROI) when --mask-source file",
     "data.val_fraction": "share of Clean/Train held out for validation and threshold calibration",
     "data.split_seed": "seed of the train/validation split",
@@ -111,7 +112,8 @@ HELP = {
     "eval.topk_frac": "fraction of pixels averaged for --reduce topk",
     "eval.image_score": "max_rod = worst rod decides, roi = whole ROI",
     "eval.threshold_percentile": "threshold = this percentile of clean validation scores",
-    "eval.batch_size": "images per evaluation batch",
+    "eval.batch_size": "images processed together (evaluation and inference)",
+    "eval.amp": "half precision on the GPU while sampling (faster; use the same value for evaluate and infer)",
     "eval.save_vis": "number of images in the visualisation sheets",
     "eval.seed": "random seed of the test-time noise",
 }

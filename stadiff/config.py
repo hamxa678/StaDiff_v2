@@ -17,7 +17,8 @@ DEFAULTS: dict = {
         "image_size": [256, 256],       # [H, W]; must be divisible by 16
         "prepare_method": "area",       # resize used by prepare_data.py and infer.py
         "norm": "percentile",           # per-image 1-99 percentile stretch, or "none"
-        "mask_source": "rods",          # "rods" (rod + weld columns), "welds" (bead boxes), "file"
+        "mask_source": "rods",          # "rods" (rod + weld columns), "box" (one rectangle), "welds", "file"
+        "roi_box": [0.13, 0.10, 0.875, 0.90],   # x0 y0 x1 y1 (fractions) when mask_source = "box"
         "mask_path": None,              # PNG mask when mask_source == "file"
         "val_fraction": 0.05,           # share of Clean/Train held out (val loss + threshold calibration)
         "split_seed": 0,
@@ -90,6 +91,7 @@ DEFAULTS: dict = {
         "image_score": "max_rod",       # "max_rod" (worst rod decides) or "roi" (whole ROI)
         "threshold_percentile": 99.0,   # threshold = this percentile of clean validation scores
         "batch_size": 8,
+        "amp": True,                    # half precision on CUDA during sampling (about 2x faster)
         "save_vis": 40,
         "seed": 0,
     },
@@ -177,8 +179,16 @@ def apply_overrides(cfg: dict, overrides) -> dict:
     return cfg
 
 
+def _fill(base: dict, defaults: dict) -> dict:
+    """base with any missing keys taken from defaults (checkpoints made by older versions)."""
+    out = copy.deepcopy(defaults)
+    for k, v in base.items():
+        out[k] = _fill(v, out[k]) if isinstance(v, dict) and isinstance(out.get(k), dict) else copy.deepcopy(v)
+    return out
+
+
 def load_config(path=None, overrides=(), base: dict | None = None) -> Cfg:
-    cfg = copy.deepcopy(base if base is not None else DEFAULTS)
+    cfg = _fill(base, DEFAULTS) if base is not None else copy.deepcopy(DEFAULTS)
     if path:
         _merge(cfg, _read_file(Path(path)))
     apply_overrides(cfg, overrides)

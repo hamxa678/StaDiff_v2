@@ -22,8 +22,10 @@ def reconstruct_and_score(model, diffusion, x0, M_t, rods_t, cfg):
     e = cfg.eval
     t_roi_max, t_bg = resolve_levels(cfg)
     Mb = M_t.expand(x0.shape[0], -1, -1, -1)
-    recons = [reconstruct(model, diffusion, x0, Mb, t_roi_max, t_bg, e.sampler,
-                          e.steps_stage1, e.steps_stage2) for _ in range(max(1, int(e.n_samples)))]
+    use_amp = bool(e.get("amp", False)) and x0.device.type == "cuda"
+    with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
+        recons = [reconstruct(model, diffusion, x0, Mb, t_roi_max, t_bg, e.sampler,
+                              e.steps_stage1, e.steps_stage2) for _ in range(max(1, int(e.n_samples)))]
     x_hat = torch.stack(recons).mean(0)       # averaging several reconstructions reduces noise
     amap = anomaly_map(x0, x_hat, e.map, e.smooth_sigma)
     img, rods = score_batch(amap, M_t, rods_t, e.reduce, e.topk_frac, e.image_score)

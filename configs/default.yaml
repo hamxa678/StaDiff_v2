@@ -7,7 +7,8 @@ data:
   image_size: [256, 256]        # [H, W], divisible by 16
   prepare_method: area          # area | bicubic | bilinear_noaa (see prepare_data.py)
   norm: percentile              # percentile | none
-  mask_source: rods             # rods (rod + weld) | welds (beads only) | file
+  mask_source: rods             # rods (rod + weld) | box (one rectangle) | welds (beads only) | file
+  roi_box: [0.13, 0.10, 0.875, 0.90]   # x0 y0 x1 y1 for mask_source = box
   mask_path: null               # your own PNG when mask_source = file
   val_fraction: 0.05
   split_seed: 0
@@ -80,5 +81,6 @@ eval:
   image_score: max_rod          # max_rod | roi
   threshold_percentile: 99.0
   batch_size: 8
+  amp: true                     # half precision on CUDA while sampling (about 2x faster)
   save_vis: 40
   seed: 0

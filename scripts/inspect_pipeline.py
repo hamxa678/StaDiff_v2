@@ -13,11 +13,17 @@ For each image it runs the two-stage reconstruction, records every intermediate 
   [5] Stage 1 ends at t_bg (handoff), Stage 2 ends at t = 0
   [6] Stage 2 changes the background too (whole-image denoising)
   [7] the anomaly score and which rod scores highest
+  [8] distance to the input image, per region, at every step: in Stage 1 the ROI gets closer while
+      the background distance stays exactly the same; in Stage 2 both get closer
 By default it uses 2 clean test images, 2 anomalous images, and a synthetic anomaly: a clean image
 whose middle rod is shifted sideways by --shift pixels (a spacing defect you know the answer to).
 
-Writes inspect.png: one row per image:
-  input | regional noising | mid Stage 1 | end Stage 1 | mid Stage 2 | reconstruction | anomaly map
+Writes
+  inspect.png     one row per image: input | regional noising | Stage 1 steps | handoff | Stage 2 steps |
+                  reconstruction | anomaly map
+  trajectory.png  per image: distance of the ROI and of the background to the input at every step,
+                  with the noise level of each region (the numerical proof of "ROI first, then all")
+  trajectory.csv  the same numbers
 """
 from __future__ import annotations
 
@@ -38,7 +44,8 @@ from stadiff.data.preprocess import load_image                                 #
 from stadiff.diffusion import RegionalDiffusion, reconstruct                   # noqa: E402
 from stadiff.evaluation.anomaly import anomaly_map, score_batch                # noqa: E402
 from stadiff.evaluation.runner import resolve_levels                           # noqa: E402
-from stadiff.utils import heat, pick_device, to_uint8                          # noqa: E402
+from stadiff.utils import pick_device                                          # noqa: E402
+from stadiff.visualize import gray, gray_auto, heat_rgb, labelled_grid, outline, save_png  # noqa: E402
 
 OK, BAD = "PASS", "FAIL"
 
@@ -104,7 +111,7 @@ def main():
             x = load_image(clean[0], size, cfg.data.prepare_method, cfg.data.norm)
             items.append((f"SYNTHETIC: rod 2 shifted {a.shift}px", shift_middle_rod(x, rods, a.shift)))
 
-    rows, all_ok = [], True
+    rows, caps, titles, trajs, all_ok = [], [], [], [], True
     torch.manual_seed(int(e.seed))
     for name, x_np in items:
         states = []
@@ -149,6 +156,15 @@ def main():
         # [6] Stage 2 touches the background
         bg2 = float(np.abs(s2[-1][2] - last1)[bg].mean()) if s2 else 0.0
         checks.append((bg2 > 1e-3, f"[6] Stage 2 bg    mean change {bg2:.4f}"))
+        # [8] distance to the input per region along the whole trajectory
+        rmse = lambda x, r: float(np.sqrt(((x - x_np)[r] ** 2).mean()))
+        traj = [(st, t, rmse(x, roi), rmse(x, bg), (t if st < 2 else t), (t_bg if st < 2 else t))
+                for st, t, x in states]
+        trajs.append((name, traj))
+        d0, d1, d2 = traj[0], (s1 and traj[len(s1)]) or traj[0], traj[-1]
+        ok8 = (d1[2] < d0[2] and d1[3] == d0[3] and d2[3] < d1[3] and d2[2] <= d1[2] + 1e-6)
+        checks.append((ok8, f"[8] distance to input (RMSE)  ROI {d0[2]:.3f} -> {d1[2]:.3f} (handoff) -> {d2[2]:.3f}"
+                            f"  |  background {d0[3]:.3f} -> {d1[3]:.3f} -> {d2[3]:.3f}"))
 
         print(f"--- {name}")
         for ok, msg in checks:
@@ -158,20 +174,76 @@ def main():
         print(f"  [7] score {img.item():.5f}   per rod: " + "  ".join(f"rod{i + 1} {v:.5f}" for i, v in enumerate(rs))
               + f"   highest: rod {int(np.argmax(rs)) + 1}")
 
-        pick = lambda lst: lst[len(lst) // 2][2] if lst else xT
-        t8 = lambda arr: to_uint8(torch.from_numpy(arr))
+        pick = lambda lst, k: [lst[int(j)] for j in np.linspace(0, len(lst) - 1, k + 2).round()[1:-1]] if lst else []
+        snaps = [states[0]] + pick(s1[:-1], 3) + s1[-1:] + pick(s2[:-1], 3)
+        tiles, cap = [outline(gray(x_np), M)], ["input"]
+        for st, t, x in snaps:
+            tiles.append(outline(gray_auto(x), M) if st < 2 else gray_auto(x))
+            cap.append(f"start: ROI {t_roi} / bg {t_bg}" if st == 0 else
+                       (f"Stage 1  ROI t={t}" + ("\nHANDOFF (all at t_bg)" if t == t_bg else "\nbackground frozen")
+                        if st == 1 else f"Stage 2  t={t}\nwhole image"))
         amap_np = amap[0, 0].cpu().numpy()
-        tiles = [t8(x_np), t8(xT), t8(pick(s1)), t8(last1), t8(pick(s2)), to_uint8(x_hat[0])]
-        tiles = [np.stack([t] * 3, -1) for t in tiles] + [heat(amap_np, max(float(np.percentile(amap_np, 99.5)), 1e-6))]
-        pad = np.full((size[0], 4, 3), 255, np.uint8)
-        rows.append(np.concatenate(sum([[t, pad] for t in tiles], [])[:-1], 1))
+        tiles += [gray(x_hat[0, 0].float().cpu().numpy()), heat_rgb(amap_np)]
+        cap += ["reconstruction", "anomaly map"]
+        rows.append(tiles)
+        caps.append(cap)
+        titles.append(f"{name}:  score {img.item():.4f}, highest rod {int(np.argmax(rs)) + 1}")
 
-    sep = np.full((4, rows[0].shape[1], 3), 255, np.uint8)
-    from PIL import Image
-    Image.fromarray(np.concatenate(sum([[r, sep] for r in rows], [])[:-1], 0)).save(out / "inspect.png")
+    fig = labelled_grid(rows, caps, row_titles=titles,
+                        title=f"REVERSE PROCESS  t_roi {t_roi}, t_bg {t_bg}, {cfg.diffusion.noise_type} noise, "
+                              f"{e.sampler} (noisy tiles contrast-stretched; red = ROI)")
+    save_png(fig, out / "inspect.png")
+
+    with (out / "trajectory.csv").open("w") as fh:
+        fh.write("image,step,stage,t_roi,t_bg,rmse_roi_to_input,rmse_bg_to_input\n")
+        for name, traj in trajs:
+            for k, (st, t, dr, db, tr, tb) in enumerate(traj):
+                fh.write(f"\"{name}\",{k},{st},{tr},{tb},{dr:.6f},{db:.6f}\n")
+    plotted = plot_trajectories(trajs, out / "trajectory.png", t_roi, t_bg)
+
     print(f"\n{'ALL CHECKS PASSED' if all_ok else 'SOME CHECKS FAILED - see above'}")
-    print(f"saved {out / 'inspect.png'}  (input | regional noising | mid Stage 1 | end Stage 1 | "
-          f"mid Stage 2 | reconstruction | anomaly map)")
+    print(f"saved {out / 'inspect.png'}  (every stage of the reconstruction, per image)")
+    if plotted:
+        print(f"saved {out / 'trajectory.png'}  (distance to the input per region, step by step)")
+    print(f"saved {out / 'trajectory.csv'}")
+
+
+def plot_trajectories(trajs, path, t_roi, t_bg) -> bool:
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return False
+    n = len(trajs)
+    fig, axes = plt.subplots(n, 1, figsize=(11, 3.2 * n), squeeze=False)
+    for ax, (name, traj) in zip(axes[:, 0], trajs):
+        k = np.arange(len(traj))
+        st = np.array([s[0] for s in traj])
+        ax.plot(k, [s[2] for s in traj], color="tab:red", lw=2, label="ROI: distance to input")
+        ax.plot(k, [s[3] for s in traj], color="tab:blue", lw=2, label="background: distance to input")
+        s1_end = int(np.flatnonzero(st == 1).max()) if (st == 1).any() else 0
+        ax.axvspan(0, s1_end, color="tab:red", alpha=0.07)
+        ax.axvline(s1_end, color="k", ls=":", lw=1)
+        ax.text(s1_end / 2, ax.get_ylim()[1] * 0.95, "Stage 1: ROI only", ha="center", va="top", fontsize=9)
+        ax.text((s1_end + len(traj) - 1) / 2, ax.get_ylim()[1] * 0.95, "Stage 2: whole image",
+                ha="center", va="top", fontsize=9)
+        ax.set_ylabel("RMSE to input")
+        ax2 = ax.twinx()
+        ax2.plot(k, [s[4] for s in traj], color="tab:red", ls="--", lw=1, label="ROI noise level t")
+        ax2.plot(k, [s[5] for s in traj], color="tab:blue", ls="--", lw=1, label="background noise level t")
+        ax2.set_ylabel("noise level t")
+        ax2.set_ylim(0, t_roi * 1.05)
+        h1, l1 = ax.get_legend_handles_labels()
+        h2, l2 = ax2.get_legend_handles_labels()
+        ax.legend(h1 + h2, l1 + l2, fontsize=7, loc="center right")
+        ax.set_title(name, fontsize=10)
+        ax.grid(alpha=0.3)
+    axes[-1, 0].set_xlabel(f"reverse step (handoff at t_bg = {t_bg}, dotted line)")
+    fig.tight_layout()
+    fig.savefig(path, dpi=90)
+    plt.close(fig)
+    return True
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ import argparse
 import csv
 import json
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -78,19 +79,32 @@ def main():
     torch.manual_seed(int(cfg.eval.seed))
 
     rows = []
-    for f in files:
-        x = load_image(f, cfg.data.image_size, cfg.data.prepare_method, cfg.data.norm)
-        x0 = torch.from_numpy(x)[None, None].to(device)
+    bs = max(1, int(cfg.eval.batch_size))
+    e = cfg.eval
+    calls = (e.steps_stage1 + e.steps_stage2) if e.sampler == "ddim" else None
+    print(f"{len(files)} images, batches of {bs}, sampler {e.sampler}"
+          + (f" ({calls} network passes per batch" if calls else " (one network pass per timestep")
+          + f" x {e.n_samples} sample(s)), half precision {bool(e.amp) and device.type == 'cuda'}")
+    t_start = time.time()
+    for i in range(0, len(files), bs):
+        chunk = files[i:i + bs]
+        x0 = torch.stack([torch.from_numpy(load_image(f, cfg.data.image_size, cfg.data.prepare_method,
+                                                      cfg.data.norm))[None] for f in chunk]).to(device)
         x_hat, amap, img, rod = reconstruct_and_score(model, diffusion, x0, M_t, rods_t, cfg)
-        score = float(img[0])
-        verdict = "" if thr is None else ("ANOMALOUS" if score >= thr else "normal")
-        a_np = amap[0, 0].cpu().numpy()
-        vmax = max(thr * 2, 1e-6) if thr else float(np.percentile(a_np, 99.5))
-        save_triplets([(to_uint8(x0[0]), to_uint8(x_hat[0]), heat(a_np, vmax), M)], out / "maps" / f"{f.stem}.png")
-        rods_list = [float(v) for v in rod[0]]
-        worst = int(np.argmax(rods_list)) + 1
-        rows.append([str(f), f"{score:.6f}", verdict, worst] + [f"{v:.6f}" for v in rods_list])
-        print(f"{f.name:40s} score {score:.5f} {verdict:10s} (highest rod: {worst})")
+        for j, f in enumerate(chunk):
+            score = float(img[j])
+            verdict = "" if thr is None else ("ANOMALOUS" if score >= thr else "normal")
+            a_np = amap[j, 0].float().cpu().numpy()
+            vmax = max(thr * 2, 1e-6) if thr else float(np.percentile(a_np, 99.5))
+            save_triplets([(to_uint8(x0[j]), to_uint8(x_hat[j]), heat(a_np, vmax), M)], out / "maps" / f"{f.stem}.png")
+            rods_list = [float(v) for v in rod[j]]
+            worst = int(np.argmax(rods_list)) + 1
+            rows.append([str(f), f"{score:.6f}", verdict, worst] + [f"{v:.6f}" for v in rods_list])
+            print(f"{f.name:40s} score {score:.5f} {verdict:10s} (highest rod: {worst})")
+        done = i + len(chunk)
+        el = time.time() - t_start
+        print(f"  [{done}/{len(files)}]  {el / done:.2f} s per image, about {el / done * (len(files) - done):.0f} s left",
+              flush=True)
 
     with (out / "results.csv").open("w", newline="") as fh:
         w = csv.writer(fh)
