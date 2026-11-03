@@ -1,0 +1,9 @@
+# Install PyTorch first, matching your machine (https://pytorch.org/get-started/locally/), e.g.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121     (NVIDIA GPU, CUDA 12.1)
+#   pip install torch                                                         (Mac / CPU)
+torch>=2.0
+numpy>=1.23
+pillow>=9.0
+pyyaml>=6.0
+tqdm>=4.60
+pytest>=7.0

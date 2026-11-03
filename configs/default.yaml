@@ -1,0 +1,80 @@
+# StaDiff-V3 default configuration. Every key is optional (missing keys use the defaults in
+# stadiff/config.py). Override any value from the command line:
+#   python scripts/train.py --config configs/default.yaml --set diffusion.noise_type=simplex
+
+data:
+  root: DATASET_prepared        # output folder of scripts/prepare_data.py
+  image_size: [256, 256]        # [H, W], divisible by 16
+  prepare_method: area          # area | bicubic | bilinear_noaa (see prepare_data.py)
+  norm: percentile              # percentile | none
+  mask_source: rods             # rods (rod + weld) | welds (beads only) | file
+  mask_path: null               # your own PNG when mask_source = file
+  val_fraction: 0.05
+  split_seed: 0
+  augment: true
+
+diffusion:
+  T_total: 1000
+  beta_schedule: linear
+  beta_start: 1.0e-4
+  beta_end: 2.0e-2
+  t_roi_max: 800                # ROI noise level (Stage 1 start)
+  t_bg: 400                     # background noise level (Stage 1 end, Stage 2 start)
+  random_bg: false              # true -> train over [t_bg_min, t_bg_max]; t_bg selectable at test time
+  t_bg_min: null
+  t_bg_max: null
+  p_stage1: 0.5
+  lam: 4.0
+  noise_type: gaussian          # gaussian | simplex
+  simplex_scale: 32.0
+  simplex_octaves: 6
+  simplex_persistence: 0.8
+
+model:
+  roi_channels: [64, 128, 256, 512]
+  ctx_channels: [32, 64, 128, 256]
+  dec_channels: [64, 64, 128, 256]
+  roi_blocks: 2
+  ctx_blocks: 1
+  dec_blocks: 2
+  emb_dim: 256
+  attn_heads: 4
+  dropout: 0.1
+  fusion: [gated, gated, cross, cross]
+  use_context_stream: true
+  bottleneck_cross_attn: true
+
+train:
+  out_dir: runs/stadiff_v3
+  batch_size: 8
+  lr: 1.0e-4
+  weight_decay: 0.0
+  iters: 100000
+  warmup_iters: 1000
+  ema_decay: 0.999
+  grad_clip: 1.0
+  amp: true
+  num_workers: 4
+  log_every: 100
+  val_every: 2000
+  ckpt_every: 5000
+  preview_every: 5000
+  seed: 0
+  resume: null
+
+eval:
+  t_roi_max: null               # null = training value; may be lowered at test time
+  t_bg: null                    # null = training value; may change only if trained with random_bg
+  sampler: ddim                 # ddim (fast) | ddpm (every step, slow)
+  steps_stage1: 50
+  steps_stage2: 50
+  n_samples: 1
+  map: l1                       # l1 | ssim | l1+ssim
+  smooth_sigma: 2.0
+  reduce: topk                  # mean | max | topk
+  topk_frac: 0.02
+  image_score: max_rod          # max_rod | roi
+  threshold_percentile: 99.0
+  batch_size: 8
+  save_vis: 40
+  seed: 0

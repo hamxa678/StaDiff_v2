@@ -1,0 +1,90 @@
+data:
+  root: DATASET_prepared
+  image_size:
+  - 64
+  - 64
+  prepare_method: area
+  norm: percentile
+  mask_source: rods
+  mask_path: null
+  val_fraction: 0.05
+  split_seed: 0
+  augment: true
+diffusion:
+  T_total: 100
+  beta_schedule: linear
+  beta_start: 0.0001
+  beta_end: 0.02
+  t_roi_max: 80
+  t_bg: 40
+  random_bg: false
+  t_bg_min: null
+  t_bg_max: null
+  p_stage1: 0.5
+  lam: 4.0
+  noise_type: gaussian
+  simplex_scale: 32.0
+  simplex_octaves: 6
+  simplex_persistence: 0.8
+model:
+  roi_channels:
+  - 16
+  - 32
+  - 32
+  - 64
+  ctx_channels:
+  - 8
+  - 16
+  - 16
+  - 32
+  dec_channels:
+  - 16
+  - 16
+  - 32
+  - 32
+  roi_blocks: 1
+  ctx_blocks: 1
+  dec_blocks: 1
+  emb_dim: 64
+  attn_heads: 2
+  dropout: 0.0
+  fusion:
+  - gated
+  - gated
+  - cross
+  - cross
+  use_context_stream: true
+  bottleneck_cross_attn: true
+train:
+  out_dir: runs/debug_tiny
+  batch_size: 4
+  lr: 0.0001
+  weight_decay: 0.0
+  iters: 200
+  warmup_iters: 10
+  ema_decay: 0.999
+  grad_clip: 1.0
+  amp: true
+  num_workers: 0
+  log_every: 20
+  val_every: 100
+  ckpt_every: 100
+  preview_every: 100
+  seed: 0
+  resume: null
+eval:
+  t_roi_max: null
+  t_bg: null
+  sampler: ddim
+  steps_stage1: 5
+  steps_stage2: 5
+  n_samples: 1
+  map: l1
+  smooth_sigma: 2.0
+  reduce: topk
+  topk_frac: 0.02
+  image_score: max_rod
+  threshold_percentile: 99.0
+  batch_size: 4
+  save_vis: 8
+  seed: 0
