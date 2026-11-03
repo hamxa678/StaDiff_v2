@@ -68,7 +68,11 @@ DEFAULTS: dict = {
         "log_every": 100,
         "val_every": 2000,
         "ckpt_every": 5000,
-        "preview_every": 5000,
+        "preview_every": 5000,          # reverse-process figure (step-by-step reconstruction)
+        "batch_vis_every": 1000,        # figure of training samples: input, true / predicted noise
+        "quick_eval_every": 5000,       # small detection test during training (0 = off)
+        "quick_eval_n": 8,              # clean val + anomalous images used by the quick test
+        "tensorboard": True,
         "seed": 0,
         "resume": None,
     },

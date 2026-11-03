@@ -34,11 +34,13 @@ def _schedule(t_start: int, t_end: int, n_steps: int | None) -> list[tuple[int, 
 
 @torch.no_grad()
 def reconstruct(model, diffusion, x0, M, t_roi_max: int, t_bg: int, sampler: str = "ddim",
-                steps_stage1: int | None = 50, steps_stage2: int | None = 50):
+                steps_stage1: int | None = 50, steps_stage2: int | None = 50, callback=None):
     """x0, M: (B, 1, H, W). Returns the reconstruction x_hat (B, 1, H, W) in [-1, 1].
 
     sampler="ddpm": ancestral sampling over every step (t_roi_max + ... network calls, slow).
     sampler="ddim": deterministic DDIM with steps_stage1 + steps_stage2 network calls.
+    callback(stage, t, x): optional, called after the forward noising (stage 0) and after every
+    reverse step with the current state; used by scripts/inspect_pipeline.py.
     """
     diffusion.check_inference(t_roi_max, t_bg)
     B, dev = x0.shape[0], x0.device
@@ -47,6 +49,8 @@ def reconstruct(model, diffusion, x0, M, t_roi_max: int, t_bg: int, sampler: str
     # 0. regional forward noising (one noise field, two levels)
     T0 = diffusion.timestep_map(full(t_roi_max), full(t_bg), M)
     x = diffusion.q_sample(x0, T0, diffusion.noise(x0))
+    if callback:
+        callback(0, t_roi_max, x)
 
     use_ddpm = sampler == "ddpm"
     if sampler not in ("ddpm", "ddim"):
@@ -61,6 +65,8 @@ def reconstruct(model, diffusion, x0, M, t_roi_max: int, t_bg: int, sampler: str
         else:
             Tn = diffusion.timestep_map(full(t_next), full(t_bg), M)
             x = diffusion.ddim_step(x, Tm, Tn, eps_hat, update_mask=M)
+        if callback:
+            callback(1, t_next, x)
 
     # 2. Stage 2: whole image, t_bg -> 0
     ones = torch.ones_like(M)
@@ -71,4 +77,6 @@ def reconstruct(model, diffusion, x0, M, t_roi_max: int, t_bg: int, sampler: str
             x = diffusion.ddpm_step(x, Tm, eps_hat, update_mask=ones)
         else:
             x = diffusion.ddim_step(x, Tm, torch.full_like(M, float(t_next)), eps_hat, update_mask=ones)
+        if callback:
+            callback(2, t_next, x)
     return x.clamp(-1, 1)

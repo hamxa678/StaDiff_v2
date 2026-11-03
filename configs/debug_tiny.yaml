@@ -27,6 +27,9 @@ train:
   val_every: 100
   ckpt_every: 100
   preview_every: 100
+  batch_vis_every: 50
+  quick_eval_every: 100
+  quick_eval_n: 4
 eval:
   steps_stage1: 5
   steps_stage2: 5

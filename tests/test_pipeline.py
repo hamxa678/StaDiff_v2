@@ -25,8 +25,11 @@ def test_full_pipeline(fake_dataset, tmp_path):
     run("scripts/train.py", "--device", "cpu", "--data", str(prepared), "--out", str(run_dir),
         "--noise", "gaussian", "--t-roi", "30", "--t-bg", "12", "--iters", "6", "--batch-size", "2",
         "--val-fraction", "0.25", "--num-workers", "0", "--log-every", "2", "--val-every", "3",
-        "--ckpt-every", "3", "--preview-every", "6", "--amp", "false", "--set", *TINY)
+        "--ckpt-every", "3", "--preview-every", "6", "--batch-vis-every", "3", "--quick-eval-every", "3",
+        "--quick-eval-n", "2", "--amp", "false", "--set", *TINY)
     assert (run_dir / "ckpt_last.pt").exists() and (run_dir / "ckpt_best.pt").exists()
+    for f in ("vis/00_forward_process.png", "vis/train_samples_0000003.png", "vis/reverse_0000006.png"):
+        assert (run_dir / f).exists(), f
     eval_dir = tmp_path / "eval"
     out = run("scripts/evaluate.py", "--checkpoint", str(run_dir / "ckpt_best.pt"), "--device", "cpu",
               "--out", str(eval_dir), "--save-vis", "4", "--t-roi", "25", "--map", "l1+ssim")
@@ -35,3 +38,7 @@ def test_full_pipeline(fake_dataset, tmp_path):
         "--images", str(fake_dataset / "Anomalous"), "--metrics", str(eval_dir / "metrics.json"),
         "--out", str(tmp_path / "infer"))
     assert (tmp_path / "infer" / "results.csv").exists()
+    out = run("scripts/inspect_pipeline.py", "--checkpoint", str(run_dir / "ckpt_best.pt"), "--device", "cpu",
+              "--out", str(tmp_path / "inspect"), "--shift", "4")
+    assert "[4] Stage 1 bg" in out and "PASS  [4]" in out          # background frozen in stage 1
+    assert (tmp_path / "inspect" / "inspect.png").exists()

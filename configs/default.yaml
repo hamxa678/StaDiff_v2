@@ -58,7 +58,11 @@ train:
   log_every: 100
   val_every: 2000
   ckpt_every: 5000
-  preview_every: 5000
+  preview_every: 5000           # reverse-process figure
+  batch_vis_every: 1000         # training-samples figure
+  quick_eval_every: 5000        # small detection test during training (0 = off)
+  quick_eval_n: 8
+  tensorboard: true
   seed: 0
   resume: null
 
